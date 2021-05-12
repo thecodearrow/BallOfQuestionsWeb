@@ -11,7 +11,7 @@ class QuizQuestions extends Component {
         let questionElements = questions.map((q) => {
             id += 1;
             let qString = id + ")" + " " + q.question;
-            return (<ListItem key={id} button><ListItemText primary={qString} /></ListItem>);
+            return (<ListItem key={id} button><ListItemText primary={qString} secondary={q.text} /></ListItem>);
 
         }
 
