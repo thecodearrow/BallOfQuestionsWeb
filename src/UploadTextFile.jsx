@@ -1,11 +1,15 @@
 import React, { Component } from 'react'
 import Button from '@material-ui/core/Button';
 import { connect } from 'react-redux';
+import ReactSnackBar from "react-js-snackbar";
+import { huggingFaceApiKey } from "./API_KEYS.js"
+
+console.log(huggingFaceApiKey, "HERE");
 
 class UploadTextFile extends Component {
     constructor(props) {
         super(props);
-        this.state = { allQuizQuestions: [] }
+        this.state = { allQuizQuestions: [], charsLimitReached: false, generatingQuestions: false, questionsSuccess: false, questionsFail: false }
 
     }
     handleFileUpload = (e) => {
@@ -17,9 +21,17 @@ class UploadTextFile extends Component {
         };
         reader.readAsText(e.target.files[0]);
     }
+    shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+
+        return array;
+    }
     getTenRandomQuestions() {
         //generates random k questions from allQuizQuestions
-        let k = 15;
+        let k = 10;
         let currentQuizQuestions = [];
         let questions = this.state.allQuizQuestions;
         console.log("Current Quiz", questions.length);
@@ -48,7 +60,7 @@ class UploadTextFile extends Component {
         //HuggingFace iarfmoose/t5-base-question-generator Model
         //Add Key to Expo Config
 
-        let huggingFaceApiKey = "Bearer api_CFeIvObMXROvMWGwGWVecWnAtQCTlObUVC"; //COMMENT IT OUT BEFORE PUSHING! 
+
 
         try {
             const url = "https://api-inference.huggingface.co/models/iarfmoose/t5-base-question-generator";
@@ -79,45 +91,123 @@ class UploadTextFile extends Component {
 
         } catch (error) {
             //
-            //Toast.show(error);
             console.log(error);
         }
-        const ner_filters = ["NOUN", "PROPN", "ORG", "PERS"]; //TODO Filter out only certain named entities
-        /*
-        if (doc.ents.length > 0) {
-            let r = Math.floor(Math.random() * doc.ents.length); //random entity is picked!
-            let current_question = this.getQuestion(sentence, doc.ents[r].text); //get a question for a random entity!
-            //console.log("Executing", current_question);
-            this.setState({ allQuizQuestions: [...this.state.allQuizQuestions, current_question] });
-            //console.log("printing state", this.state)
-        }
 
-        */
 
     }
+    showAlert(type) {
+        //alert message with type as state
+        this.setState({ [type]: true });
+        setTimeout(() => {
+            this.setState({ [type]: false });
+        }, 5000);
+    }
 
-    async generateQuiz(text) {
+    async getNamedEntities(sentence) {
+        console.log("HI", sentence);
 
-        //Show Toast
+
+        //const ner_filters = ["NOUN", "PROPN", "ORG", "PERS"]; //TODO Filter out only certain named entities
+        try {
+            const url = "https://api-inference.huggingface.co/models/dslim/bert-base-NER";
+            const config = {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Authorization': huggingFaceApiKey
+                },
+                body: JSON.stringify({ "inputs": sentence })
+            }
+            const response = await fetch(url, config);
+            const json = await response.json();
+            if (response.ok) {
+                let named_entities = json;
+                if (!named_entities) {
+                    return;
+                }
+                let entity_filters = ["MISC"]; //not needed entities!
+                let filtered_entities = [];
+                for (var entity of named_entities) {
+                    if (entity_filters.includes(entity["entity_group"]) || entity["word"].includes("#")) {
+                        continue;
+                    }
+                    filtered_entities.push(entity);
+
+                }
+
+                let random_entity = filtered_entities[Math.floor(Math.random() * filtered_entities.length)]; //pick a random entity from the filtered entity
+                let question = sentence.replaceAll(random_entity["word"], "____")
+                console.log(question);
+                let id = this.state.allQuizQuestions.length;
+                let current_question = { "id": id, "type": "fill_in_the_blanks", "text": random_entity["word"], "question": question };
+                this.setState({ allQuizQuestions: [...this.state.allQuizQuestions, current_question] });
+
+
+
+            }
+
+
+        } catch (error) {
+
+            console.log(error);
+        }
+
+    }
+    trimSentences(sentences, chars_allowed) {
+        let c = 0;
+        let trimmed_sentences = []; //limit to 1k chars
+        for (var sentence of sentences) {
+            c += sentence.length;
+            trimmed_sentences.push(sentence);
+            if (c > chars_allowed) {
+                break;
+            }
+
+        }
+        return trimmed_sentences;
+
+    }
+    async generateQuiz(content) {
+
+        let CHAR_LIMIT = 10000;
         //flush out all the existing questions 
         this.setState({ "allQuizQuestions": [] });
-        let content = text;
-        if (content.length > 10000) {
+        if (content.length > CHAR_LIMIT) {
             //more than 10k chars
-            alert("Pasted text is too huge to be processed!");
+            this.showAlert("charsLimitReached");
             return;
         }
+        this.showAlert("generatingQuestions");
         //console.log(content);
         let sentences = content.split(".");
-        for (var sentence of sentences) {
-            let temp = await this.getQuestionFromT5(sentence); //IMP! This has to finish executing before executing the next few lines!
+        sentences = this.shuffleArray(sentences); //shuffle sentences! 
+        let trimmed_sentences = this.trimSentences(sentences, 1000);
+        for (var sentence of trimmed_sentences) {
+            if (this.state.allQuizQuestions.length > 10) {
+                //we have 10 questions!
+                break;
+            }
+            await this.getQuestionFromT5(sentence); //Get Questions From T5
+            //await this.getNamedEntities(sentence);
+        }
+        sentences = this.shuffleArray(sentences); //shuffle sentences again! 
+
+        trimmed_sentences = this.trimSentences(sentences, 1000);
+        for (var sentence of trimmed_sentences) {
+            if (this.state.allQuizQuestions.length > 10) {
+                //we have 10 questions!
+                break;
+            }
+            await this.getNamedEntities(sentence); //Form Fill In the Blank Questions using Named Entities
         }
         //TODO Get top 10 questions (for now I am doing this randomly)
         let top10 = this.getTenRandomQuestions();
         if (top10.length > 0) {
 
             this.props.storeQuiz(top10); //save quiz to STORE
-            alert("Quiz Generated! Check 'Questions' Tab");
+            this.showAlert("questionsSuccess"); //show success toast!
         }
 
     }
@@ -126,6 +216,20 @@ class UploadTextFile extends Component {
             <div style={{ position: "absolute", top: "35%", left: "45%" }}>
                 <input label="Upload" type="file" accept=".txt" onChange={(e) => this.handleFileUpload(e)} />
 
+                <ReactSnackBar Icon={<span>🙉</span>} Show={this.state.charsLimitReached}>
+                    Too many chars! (greater than 1k chars)
+                </ReactSnackBar>
+
+                <ReactSnackBar Icon={<span>🦄</span>} Show={this.state.generatingQuestions}>
+                    Generating questions...
+                </ReactSnackBar>
+
+                <ReactSnackBar Icon={<span>✅</span>} Show={this.state.questionsSuccess}>
+                    Success! Check 'Questions' Tab
+                </ReactSnackBar>
+                <ReactSnackBar Icon={<span>⁉️</span>} Show={this.state.questionsFail}>
+                    Oh no! Something went wrong.
+                </ReactSnackBar>
 
             </div>
 

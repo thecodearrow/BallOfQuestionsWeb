@@ -3,8 +3,7 @@ import TextField from '@material-ui/core/TextField';
 import Button from '@material-ui/core/Button';
 import { connect } from 'react-redux';
 import ReactSnackBar from "react-js-snackbar";
-
-
+import { huggingFaceApiKey } from "./API_KEYS.js"
 
 class CopyPasteTextBox extends Component {
     constructor(props) {
