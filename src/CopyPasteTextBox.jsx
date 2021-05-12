@@ -5,6 +5,7 @@ import { connect } from 'react-redux';
 import ReactSnackBar from "react-js-snackbar";
 
 
+
 class CopyPasteTextBox extends Component {
     constructor(props) {
         super(props);
@@ -56,7 +57,7 @@ class CopyPasteTextBox extends Component {
         //HuggingFace iarfmoose/t5-base-question-generator Model
         //Add Key to Expo Config
 
-        let huggingFaceApiKey = "Bearer api_ynAnWxlAXdpXPiaAwtSXTiKusXzWAWAAOY"; //COMMENT IT OUT BEFORE PUSHING! 
+
 
         try {
             const url = "https://api-inference.huggingface.co/models/iarfmoose/t5-base-question-generator";
@@ -103,7 +104,7 @@ class CopyPasteTextBox extends Component {
     async getNamedEntities(sentence) {
         console.log("HI", sentence);
 
-        let huggingFaceApiKey = "Bearer api_ynAnWxlAXdpXPiaAwtSXTiKusXzWAWAAOY"; //COMMENT IT OUT BEFORE PUSHING! 
+
         //const ner_filters = ["NOUN", "PROPN", "ORG", "PERS"]; //TODO Filter out only certain named entities
         try {
             const url = "https://api-inference.huggingface.co/models/dslim/bert-base-NER";
